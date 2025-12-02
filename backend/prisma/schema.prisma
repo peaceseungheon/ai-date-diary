@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId    String   @id @default(uuid()) @map("user_id")
+  email     String   @unique
+  passwordHash String @map("password_hash")
+  nickname  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  diaries   Diary[]
+  uploadSessions UploadSession[]
+
+  @@map("users")
+}
+
+model Diary {
+  diaryId   String   @id @default(uuid()) @map("diary_id")
+  userId    String   @map("user_id")
+  title     String
+  content   String   @db.Text
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  photos    Photo[]
+
+  @@index([userId, date(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("diaries")
+}
+
+model Photo {
+  photoId       String   @id @default(uuid()) @map("photo_id")
+  diaryId       String   @map("diary_id")
+  filePath      String   @map("file_path")
+  thumbnailPath String   @map("thumbnail_path")
+  fileSize      Int      @map("file_size")
+  mimeType      String   @map("mime_type")
+  order         Int
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  diary         Diary    @relation(fields: [diaryId], references: [diaryId], onDelete: Cascade)
+
+  @@index([diaryId, order(sort: Asc)])
+  @@map("photos")
+}
+
+model UploadSession {
+  uploadId  String   @id @default(uuid()) @map("upload_id")
+  userId    String   @map("user_id")
+  fileCount Int      @map("file_count")
+  status    String   // pending, completed, expired
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  tempPhotos TempPhoto[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("upload_sessions")
+}
+
+model TempPhoto {
+  fileId    String   @id @default(uuid()) @map("file_id")
+  uploadId  String   @map("upload_id")
+  filePath  String   @map("file_path")
+  fileSize  Int      @map("file_size")
+  mimeType  String   @map("mime_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  uploadSession UploadSession @relation(fields: [uploadId], references: [uploadId], onDelete: Cascade)
+
+  @@index([uploadId])
+  @@map("temp_photos")
+}
