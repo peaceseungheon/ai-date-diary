@@ -11,19 +11,24 @@ import {
   createUploadSession,
   confirmUpload,
   getUploadSession,
+  uploadPhotos,
 } from '../controllers/upload.controller';
 import { createDiaryValidator, updateDiaryValidator } from '../validators/diary.validator';
 import {
   createUploadSessionValidator,
   confirmUploadValidator,
 } from '../validators/upload.validator';
+import { upload } from '../config/multer';
 
 const router = Router();
 
 // All diary routes require authentication
 router.use(authenticateToken);
 
-// Upload session routes
+// Upload photos directly to server
+router.post('/upload-photos', upload.array('photos', 10), uploadPhotos);
+
+// Upload session routes (presigned URLs - legacy)
 router.post('/upload-session', createUploadSessionValidator, createUploadSession);
 router.post('/upload-confirm', confirmUploadValidator, confirmUpload);
 router.get('/upload-session/:uploadId', getUploadSession);

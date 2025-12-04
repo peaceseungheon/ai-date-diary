@@ -212,7 +212,6 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiClient } from '../lib/axios';
-import axios from 'axios';
 
 const router = useRouter();
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -292,47 +291,31 @@ const uploadPhotos = async (): Promise<string | null> => {
   error.value = '';
 
   try {
-    // Step 1: Create upload session
-    const fileNames = selectedFiles.value.map(sf => sf.file.name);
-    const sessionResponse = await apiClient.post('/diaries/upload-session', {
-      fileCount: selectedFiles.value.length,
-      fileNames,
+    // Create FormData with all files
+    const formDataObj = new FormData();
+    selectedFiles.value.forEach((selectedFile, index) => {
+      formDataObj.append('photos', selectedFile.file);
+      uploadProgress.value[index] = 0;
     });
 
-    const { uploadId: sessionId, presignedUrls } = sessionResponse.data.data;
-    uploadId.value = sessionId;
+    // Upload files directly to server
+    const response = await apiClient.post('/diaries/upload-photos', formDataObj, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: progressEvent => {
+        if (progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          // Update all file progress (since it's a single request)
+          selectedFiles.value.forEach((_, index) => {
+            uploadProgress.value[index] = progress;
+          });
+        }
+      },
+    });
 
-    // Step 2: Upload files to S3
-    for (let i = 0; i < selectedFiles.value.length; i++) {
-      const { file } = selectedFiles.value[i];
-      const { uploadUrl, filePath, fileId } = presignedUrls[i];
-
-      uploadProgress.value[i] = 0;
-
-      await axios.put(uploadUrl, file, {
-        headers: {
-          'Content-Type': file.type,
-        },
-        onUploadProgress: progressEvent => {
-          if (progressEvent.total) {
-            uploadProgress.value[i] = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-          }
-        },
-      });
-
-      // Step 3: Confirm upload
-      await apiClient.post('/diaries/upload-confirm', {
-        uploadId: sessionId,
-        fileId,
-        filePath,
-        fileSize: file.size,
-        mimeType: file.type,
-      });
-    }
-
-    return sessionId;
+    uploadId.value = response.data.uploadSessionId;
+    return response.data.uploadSessionId;
   } catch (err: any) {
     console.error('Photo upload failed:', err);
     error.value = '사진 업로드에 실패했습니다. 다시 시도해주세요.';

@@ -3,7 +3,75 @@ import { validationResult } from 'express-validator';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { generatePresignedUrls } from '../utils/s3';
+import { generatePresignedUrls, uploadFile } from '../utils/s3';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * Upload photos directly to S3
+ */
+export const uploadPhotos = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ message: 'No files provided' });
+      return;
+    }
+
+    // Create upload session
+    const uploadSession = await prisma.uploadSession.create({
+      data: {
+        userId,
+        fileCount: files.length,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    const uploadedPhotos = [];
+
+    // Upload each file to S3
+    for (const file of files) {
+      const photoId = uuidv4();
+      const fileExtension = file.originalname.split('.').pop() || 'jpg';
+      const tempPath = `temp/${userId}/${uploadSession.uploadId}/${photoId}.${fileExtension}`;
+
+      // Upload to S3
+      await uploadFile(file.buffer, file.originalname, file.mimetype, tempPath);
+
+      // Create temp photo record
+      const tempPhoto = await prisma.tempPhoto.create({
+        data: {
+          fileId: photoId,
+          uploadId: uploadSession.uploadId,
+          filePath: tempPath,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+        },
+      });
+
+      uploadedPhotos.push({
+        fileId: tempPhoto.fileId,
+        originalName: file.originalname,
+        fileSize: tempPhoto.fileSize,
+        mimeType: tempPhoto.mimeType,
+      });
+    }
+
+    res.status(201).json({
+      uploadSessionId: uploadSession.uploadId,
+      photos: uploadedPhotos,
+    });
+  } catch (error) {
+    logger.error('Error uploading photos:', error);
+    res.status(500).json({ message: 'Failed to upload photos' });
+  }
+};
 
 /**
  * Create upload session and generate presigned URLs for file uploads

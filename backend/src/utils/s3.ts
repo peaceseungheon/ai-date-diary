@@ -10,12 +10,15 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from './logger';
 
 // Configure AWS SDK v3
+const region = process.env.AWS_REGION || 'ap-northeast-2';
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'ap-northeast-2',
+  region,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
+  forcePathStyle: false,
+  endpoint: `https://s3.${region}.amazonaws.com`,
 });
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET || 'date-diary-images';
@@ -26,6 +29,33 @@ export interface PresignedUrlData {
   uploadUrl: string;
   filePath: string;
 }
+
+/**
+ * Upload file directly to S3
+ */
+export const uploadFile = async (
+  file: Buffer,
+  fileName: string,
+  mimeType: string,
+  uploadPath: string
+): Promise<string> => {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: uploadPath,
+      Body: file,
+      ContentType: mimeType,
+    });
+
+    await s3Client.send(command);
+
+    logger.info(`Uploaded file to S3: ${uploadPath}`);
+    return uploadPath;
+  } catch (error) {
+    logger.error('Error uploading file to S3:', error);
+    throw new Error('Failed to upload file');
+  }
+};
 
 /**
  * Generate presigned URLs for uploading files to S3
