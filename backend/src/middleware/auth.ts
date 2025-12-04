@@ -10,29 +10,31 @@ export interface AuthRequest extends Request {
   user?: JwtPayload;
 }
 
-export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
         message: 'Access token is required',
       },
     });
+    return;
   }
 
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
         message: 'JWT secret is not configured',
       },
     });
+    return;
   }
 
   try {
@@ -40,7 +42,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     req.user = payload;
     next();
   } catch (error) {
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       error: {
         code: 'FORBIDDEN',

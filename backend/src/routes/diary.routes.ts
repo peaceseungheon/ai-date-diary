@@ -44,7 +44,7 @@ router.put('/:diaryId', updateDiaryValidator, updateDiary);
 router.delete('/:diaryId', deleteDiary);
 
 // TODO: Implement AI generation route
-router.post('/generate', (req, res) => {
+router.post('/generate', (_req, res) => {
   res
     .status(501)
     .json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Not implemented yet' } });
